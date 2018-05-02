@@ -1,0 +1,10 @@
+[package]
+name = "first_rust_game"
+version = "0.1.0"
+authors = ["Timo Obereder <timo.obereder@gmail.com>"]
+
+[dependencies]
+ggez = "0.4.2"
+nalgebra = "0.11.0"
+ncollide = "0.11.0"
+nphysics2d = "0.6.0"
