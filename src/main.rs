@@ -47,11 +47,21 @@ struct Actor {
     life: f32,
 }
 
+struct Assets {
+    player_image: ggez::graphics::Image,
+    shot_image: ggez::graphics::Image,
+    rock_image: ggez::graphics::Image,
+    font: ggez::graphics::Font,
+    shot_sound: ggez::audio::Source,
+    hit_sound: ggez::audio::Source,
+}
+
 pub struct Game {
     world: World<f32>,
     //TODO: turn player type into Actor instead of directly using RigidBodyHandle<f32>
     player: Actor,
     player_body: RigidBodyHandle<f32>,
+    // walls: Vec<Actor>,
     wall_bodies: Vec<RigidBodyHandle<f32>>,
     // level: i32,
     // score: i32,
@@ -143,7 +153,7 @@ impl Game {
             wall.body.set_inv_mass(0.);
             wall.body.append_rotation(&UnitComplex::new(100.0));
             // wall.body.append_rotation(&UnitComplex::new(rand::thread_rng().gen_range(0.0, 100.0)));
-            wall.body.append_translation(&Translation2::new(0.0, 300.0)); //rand::thread_rng().gen_range(0., 400.0)));
+            wall.body.append_translation(&Translation2::new(0.0, rand::thread_rng().gen_range(200.0, 300.0))); //rand::thread_rng().gen_range(0., 400.0)));
             wall_bodies.push(world.add_rigid_body(wall.body.clone()));
         }
 
@@ -176,6 +186,7 @@ impl EventHandler for Game {
         }
         Ok(())
     }
+
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         clear(ctx);
         let pos = self.player_body.borrow().position_center();
@@ -184,14 +195,25 @@ impl EventHandler for Game {
 
         // Loop over all objects drawing them...
         {
+            // for wall in &self.walls {
+            //     let mut local = wall.borrow();
+            // }
+
             for wall_body in &self.wall_bodies {
-                line(ctx, &[Point2::new(wall_body.borrow().position_center().x, wall_body.borrow().position_center().y), Point2::new(WINDOW_WIDTH as f32, -100.0)], 1.0)?;
+                // let mut coords = wall_body.borrow_mut();
+                // let local = coords.local_to_world;
+                line(ctx, &[Point2::new(
+                    wall_body.borrow().position_center().x, 
+                    wall_body.borrow().position_center().y), 
+                    Point2::new(WINDOW_WIDTH as f32, 
+                    -100.0)], 1.0)?; //wall_body.borrow().position_center().coords.data
             }
         }
 
         present(ctx);
         Ok(())
     }
+
     fn key_down_event(&mut self, _ctx: &mut Context, keycode: Keycode, _keymod: Mod, repeat: bool) {
         if !repeat {
             match keycode {
@@ -247,4 +269,34 @@ fn print_instructions() {
     println!("How to play:");
     println!("Left/Right arrow keys move your ball, space bar lets the ball jump");
     println!();
+}
+
+// fn draw_actor_with_assets(
+//     assets: &mut Assets,
+//     ctx: &mut Context,
+//     actor: &mut Actor,
+//     world_coords: (u32, u32),
+// ) -> GameResult<()> {
+//     let (screen_w, screen_h) = world_coords;
+//     let pos = world_to_screen_coords(screen_w, screen_h, actor.pos);
+//     let image = assets.actor_image(actor);
+//     let drawparams = ggez::graphics::DrawParam {
+//         dest: pos,
+//         rotation: actor.direction as f32, //facing var for rotation 
+//         offset: ggez::graphics::Point2::new(0.5, 0.5),
+//         ..Default::default()
+//     };
+//     ggez::graphics::draw_ex(ctx, image, drawparams)
+// }
+
+/// Translates the world coordinate system, which
+/// has Y pointing up and the origin at the center,
+/// to the screen coordinate system, which has Y
+/// pointing downward and the origin at the top-left,
+fn world_to_screen_coords(screen_width: u32, screen_height: u32, point: Point2) -> Point2 {
+    let width = screen_width as f32;
+    let height = screen_height as f32;
+    let x = point.x + width / 2.0;
+    let y = height - (point.y + height / 2.0);
+    Point2::new(x, y)
 }
