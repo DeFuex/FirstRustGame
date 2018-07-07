@@ -15,3 +15,7 @@ brew install sdl2
 ```
 cargo run
 ```
+
+## Game
+
+<img width="912" alt="screen shot 2018-07-07 at 18 03 04" src="https://user-images.githubusercontent.com/223045/42412193-390bd758-8210-11e8-8cf3-45792e69aa27.png">
