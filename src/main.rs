@@ -62,7 +62,12 @@ pub struct Game {
     player: Actor,
     player_body: RigidBodyHandle<f32>,
     // walls: Vec<Actor>,
+    is_walls_setup: bool,
+    walls: Vec<Actor>,
     wall_bodies: Vec<RigidBodyHandle<f32>>,
+    wall_collision: bool,
+    wall_pos_col_x: f32,
+    wall_pos_col_y: f32,
     // level: i32,
     // score: i32,
     // assets: Assets,
@@ -142,23 +147,39 @@ impl Game {
 
         let mut player = create_player();
         let walls = create_walls(5, player.pos);
-        let mut wall_bodies = Vec::new();
+        
+        let wall_bodies = Vec::new();
 
         // let mut player = RigidBody::new_dynamic(Ball::new(PLAYER_R), 1.0, 0.0, 0.0);
         player.body.set_inv_mass(1.5);
         player.body.append_translation(&Translation2::new(400.0, 300.0));
         let player_body = world.add_rigid_body(player.body.clone());
 
-        for mut wall in walls {
-            wall.body.set_inv_mass(0.);
-            wall.body.append_rotation(&UnitComplex::new(100.0));
-            // wall.body.append_rotation(&UnitComplex::new(rand::thread_rng().gen_range(0.0, 100.0)));
-            wall.body.append_translation(&Translation2::new(0.0, rand::thread_rng().gen_range(200.0, 300.0))); //rand::thread_rng().gen_range(0., 400.0)));
-            wall_bodies.push(world.add_rigid_body(wall.body.clone()));
-        }
-
-        let s = Game { world, player, player_body, wall_bodies };
+        let s = Game { 
+                world, 
+                player, 
+                player_body, 
+                is_walls_setup: false,
+                walls, 
+                wall_bodies,
+                wall_collision: false,
+                wall_pos_col_x: 0.0,
+                wall_pos_col_y: 0.0,
+            };
         Ok(s)
+    }
+
+    fn setup_walls(&mut self) {
+        if !self.is_walls_setup {
+            for wall in &mut self.walls {
+                wall.body.set_inv_mass(0.);
+                wall.body.append_rotation(&UnitComplex::new(100.0));
+                // wall.body.append_rotation(&UnitComplex::new(rand::thread_rng().gen_range(0.0, 100.0)));
+                wall.body.append_translation(&Translation2::new(0.0, rand::thread_rng().gen_range(200.0, 300.0))); //rand::thread_rng().gen_range(0., 400.0)));
+                self.wall_bodies.push(self.world.add_rigid_body(wall.body.clone()));
+            }
+            self.is_walls_setup = true;
+        }
     }
 
     fn refresh_horizontal_vel(&mut self) {
@@ -176,6 +197,33 @@ impl Game {
         player.set_lin_vel(Vector2::new(dir * 400.0, current.y));
         player.set_rotation(UnitComplex::new(rot));
     }
+
+    fn handle_collisions(&mut self) {
+        // if player collides with wall, decide to stick to it with space/jump button
+        for wall in &mut self.walls {
+            let pdistance = wall.pos - self.player.pos;
+            if pdistance.norm() < (self.player.bbox_size + wall.bbox_size) {
+                // self.player.life = 0.0;
+                self.wall_collision = true;
+                self.wall_pos_col_x = wall.pos.x;
+                self.wall_pos_col_y = wall.pos.y;
+                break;
+            } else {
+                self.wall_collision = false;
+            }
+
+            // for shot in &mut self.shots {
+            //     let distance = shot.pos - rock.pos;
+            //     if distance.norm() < (shot.bbox_size + rock.bbox_size) {
+            //         shot.life = 0.0;
+            //         rock.life = 0.0;
+            //         self.score += 1;
+            //         self.gui_dirty = true;
+            //         let _ = self.assets.hit_sound.play();
+            //     }
+            // }
+        }
+    }
 }
 
 impl EventHandler for Game {
@@ -184,6 +232,11 @@ impl EventHandler for Game {
         while timer::check_update_time(ctx, DESIRED_FPS) {
             self.world.step(1.0 / DESIRED_FPS as f32);
         }
+
+        self.setup_walls();
+
+        self.handle_collisions();
+
         Ok(())
     }
 
@@ -224,6 +277,10 @@ impl EventHandler for Game {
                     self.player.mov_right = true;
                 }
                 Keycode::Space => {
+                    if self.wall_collision {
+                         self.world.set_gravity(Vector2::new(0.0, -200.0));
+                    }
+
                     let mut player: std::cell::RefMut<RigidBody<f32>> = self.player_body.borrow_mut();
                     if player.position_center().y + PLAYER_R > FLOOR_Y - 0.1 {
                         player.apply_central_impulse(Vector2::new(0.0, -150.0));
@@ -243,12 +300,16 @@ impl EventHandler for Game {
                 Keycode::Right => {
                     self.player.mov_right = false;
                 }
+                Keycode::Space => {
+                    // if !self.wall_collision {
+                        self.world.set_gravity(Vector2::new(0.0, 200.0));
+                    // }
+                }
                 _ => ()
             }
             self.refresh_horizontal_vel();
         }
     }
-
 }
 
 pub fn main() {
