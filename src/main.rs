@@ -22,13 +22,20 @@ const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 
 const PLAYER_LIFE: f32 = 1.0;
-const PLAYER_BBOX: f32 = 12.0;
+const PLAYER_BBOX: f32 = 2.0;
 const PLAYER_R: f32 = 10.0;
 
 const WALL_LIFE: f32 = 10.0;
-const WALL_BBOX: f32 = 5.0;
+const WALL_BBOX: f32 = 1.0;
 
 const FLOOR_Y: f32 = 400.0;
+
+const MAX_PHYSICS_VEL: f32 = 250.0;
+
+// Acceleration in pixels per second.
+const PLAYER_THRUST: f32 = 100.0;
+// Rotation in radians per second.
+const PLAYER_TURN_RATE: f32 = 3.0;
 
 enum ActorType {
     Player,
@@ -41,6 +48,7 @@ struct Actor {
     pos: Point2,
     direction: f32,
     velocity: gVector2,
+    ang_vel: f32,
     mov_left: bool,
     mov_right: bool,
     bbox_size: f32,
@@ -62,7 +70,12 @@ pub struct Game {
     player: Actor,
     player_body: RigidBodyHandle<f32>,
     // walls: Vec<Actor>,
+    is_walls_setup: bool,
+    walls: Vec<Actor>,
     wall_bodies: Vec<RigidBodyHandle<f32>>,
+    wall_collision: bool,
+    wall_pos_col_x: f32,
+    wall_pos_col_y: f32,
     // level: i32,
     // score: i32,
     // assets: Assets,
@@ -81,6 +94,7 @@ fn create_player() -> Actor {
         pos: Point2::origin(),
         direction: 0.,
         velocity: na::zero(),
+        ang_vel: 0.,
         mov_left: false,
         mov_right: false,
         bbox_size: PLAYER_BBOX,
@@ -95,6 +109,7 @@ fn create_wall() -> Actor {
         pos: Point2::origin(),
         direction: 0.,
         velocity: na::zero(),
+        ang_vel: 0.,
         mov_left: false,
         mov_right: false,
         bbox_size: WALL_BBOX,
@@ -129,6 +144,44 @@ fn random_vector(max_magnitude: f32) -> ggez::graphics::Vector2 {
     vec_from_angle(angle) * (mag)
 }
 
+// fn player_handle_input(actor: &mut Actor, input: &InputState, dt: f32) {
+//     actor.facing += dt * PLAYER_TURN_RATE * input.xaxis;
+
+//     if input.yaxis > 0.0 {
+//         player_thrust(actor, dt);
+//     }
+// }
+
+fn player_handle_input(actor: &mut Actor, dt: f32) {
+    actor.direction += dt * PLAYER_TURN_RATE; //* input.xaxis;
+
+    // if input.yaxis > 0.0 {
+        player_thrust(actor, dt);
+    // }
+}
+
+fn player_thrust(actor: &mut Actor, dt: f32) {
+    let direction_vector = vec_from_angle(actor.direction);
+    let thrust_vector = direction_vector * (PLAYER_THRUST);
+    actor.velocity += thrust_vector * (dt);
+}
+
+fn update_actor_position(actor: &mut Actor, dt: f32) {
+    // Clamp the velocity to the max efficiently
+    let norm_sq = actor.velocity.norm_squared();
+    if norm_sq > MAX_PHYSICS_VEL.powi(2) {
+        actor.velocity = actor.velocity / norm_sq.sqrt() * MAX_PHYSICS_VEL;
+    }
+    // println!("SECONDS: {}", dt);
+    // println!("VELOCITY: {}", actor.velocity);
+    // let dv = ([[actor.velocity], [0, 1]].concat()) * (dt);
+    let dv = actor.velocity * (dt);
+    // println!("DIFF pos: {}", dv);
+    actor.pos += dv;
+    // println!("CHANGE player pos: {}", actor.pos);
+    actor.direction += actor.ang_vel;
+}
+
 impl Game {
     fn new(_ctx: &mut Context) -> GameResult<Game> {
 
@@ -142,23 +195,39 @@ impl Game {
 
         let mut player = create_player();
         let walls = create_walls(5, player.pos);
-        let mut wall_bodies = Vec::new();
+        
+        let wall_bodies = Vec::new();
 
         // let mut player = RigidBody::new_dynamic(Ball::new(PLAYER_R), 1.0, 0.0, 0.0);
         player.body.set_inv_mass(1.5);
         player.body.append_translation(&Translation2::new(400.0, 300.0));
         let player_body = world.add_rigid_body(player.body.clone());
 
-        for mut wall in walls {
-            wall.body.set_inv_mass(0.);
-            wall.body.append_rotation(&UnitComplex::new(100.0));
-            // wall.body.append_rotation(&UnitComplex::new(rand::thread_rng().gen_range(0.0, 100.0)));
-            wall.body.append_translation(&Translation2::new(0.0, rand::thread_rng().gen_range(200.0, 300.0))); //rand::thread_rng().gen_range(0., 400.0)));
-            wall_bodies.push(world.add_rigid_body(wall.body.clone()));
-        }
-
-        let s = Game { world, player, player_body, wall_bodies };
+        let s = Game { 
+                world, 
+                player, 
+                player_body, 
+                is_walls_setup: false,
+                walls, 
+                wall_bodies,
+                wall_collision: false,
+                wall_pos_col_x: 0.0,
+                wall_pos_col_y: 0.0,
+            };
         Ok(s)
+    }
+
+    fn setup_walls(&mut self) {
+        if !self.is_walls_setup {
+            for wall in &mut self.walls {
+                wall.body.set_inv_mass(0.);
+                wall.body.append_rotation(&UnitComplex::new(100.0));
+                // wall.body.append_rotation(&UnitComplex::new(rand::thread_rng().gen_range(0.0, 100.0)));
+                wall.body.append_translation(&Translation2::new(0.0, rand::thread_rng().gen_range(200.0, 300.0))); //rand::thread_rng().gen_range(0., 400.0)));
+                self.wall_bodies.push(self.world.add_rigid_body(wall.body.clone()));
+            }
+            self.is_walls_setup = true;
+        }
     }
 
     fn refresh_horizontal_vel(&mut self) {
@@ -176,14 +245,56 @@ impl Game {
         player.set_lin_vel(Vector2::new(dir * 400.0, current.y));
         player.set_rotation(UnitComplex::new(rot));
     }
+
+    fn handle_collisions(&mut self) {
+        // if player collides with wall, decide to stick to it with space/jump button
+        for wall in &mut self.walls {
+            let pdistance = wall.pos - self.player.pos;
+
+            /* TEST VALUES */
+            println!("wall pos: {}", wall.pos);
+            println!("player pos: {}", self.player.pos);
+            println!("{}", wall.pos - self.player.pos);
+            println!("distance: {}", pdistance.norm());
+            println!("player box: {}", self.player.bbox_size);
+            println!("wall box: {}", wall.bbox_size);
+            println!("box size: {}", self.player.bbox_size + wall.bbox_size);
+            println!("{}", (pdistance.norm()/1000.0) < (self.player.bbox_size + wall.bbox_size));
+            /* TEST VALUES */
+
+            if (pdistance.norm()/100.) < (self.player.bbox_size + wall.bbox_size) {
+                // self.player.life = 0.0;
+                self.wall_collision = true;
+                self.wall_pos_col_x = wall.pos.x;
+                self.wall_pos_col_y = wall.pos.y;
+                break;
+            } else {
+                self.wall_collision = false;
+            }
+
+            println!("WALL_COLLISION: {}", self.wall_collision);
+        }
+    }
 }
 
 impl EventHandler for Game {
     fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         const DESIRED_FPS: u32 = 60;
         while timer::check_update_time(ctx, DESIRED_FPS) {
-            self.world.step(1.0 / DESIRED_FPS as f32);
+            let seconds = 1.0 / (DESIRED_FPS as f32);
+
+            self.world.step(seconds);
+
+            player_handle_input(&mut self.player, seconds);
+
+            // Update the pos of all actors to avoid e.g.: self.player.pos = [0, 0]
+            update_actor_position(&mut self.player, seconds);
         }
+
+        self.setup_walls();
+
+        self.handle_collisions();
+
         Ok(())
     }
 
@@ -224,6 +335,12 @@ impl EventHandler for Game {
                     self.player.mov_right = true;
                 }
                 Keycode::Space => {
+                    if self.wall_collision {
+                        self.world.set_gravity(Vector2::new(0.0, -200.0));
+                    } else {
+                        self.world.set_gravity(Vector2::new(0.0, 200.0));
+                    }
+
                     let mut player: std::cell::RefMut<RigidBody<f32>> = self.player_body.borrow_mut();
                     if player.position_center().y + PLAYER_R > FLOOR_Y - 0.1 {
                         player.apply_central_impulse(Vector2::new(0.0, -150.0));
@@ -243,12 +360,22 @@ impl EventHandler for Game {
                 Keycode::Right => {
                     self.player.mov_right = false;
                 }
+                Keycode::Space => {
+                    if self.wall_collision {
+                        // if (self.wall_pos_col_y > self.player.pos.y) &&
+                        // (self.wall_pos_col_x > self.player.pos.x) {
+                            self.world.set_gravity(Vector2::new(0.0, 200.0));
+                        // }
+                    } 
+                    // else {
+                    //     self.world.set_gravity(Vector2::new(0.0, -200.0));
+                    // }
+                }
                 _ => ()
             }
             self.refresh_horizontal_vel();
         }
     }
-
 }
 
 pub fn main() {
