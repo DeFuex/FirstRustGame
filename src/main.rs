@@ -1,6 +1,6 @@
 extern crate ggez;
 extern crate nalgebra as na;
-extern crate ncollide;
+extern crate ncollide2d;
 extern crate nphysics2d;
 extern crate rand;
 
@@ -13,10 +13,10 @@ use ggez::timer;
 use rand::Rng;
 
 use na::{Vector1, Vector2, Translation2, UnitComplex};
-use ncollide::shape::{Ball, Plane};
+use ncollide2d::shape::{Ball, Plane};
 use nphysics2d::world::World;
 use nphysics2d::math::Orientation;
-use nphysics2d::object::{RigidBody, RigidBodyHandle};
+use nphysics2d::object::{RigidBody, BodyHandle};
 
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
@@ -66,13 +66,13 @@ struct Assets {
 
 pub struct Game {
     world: World<f32>,
-    //TODO: turn player type into Actor instead of directly using RigidBodyHandle<f32>
+    //TODO: turn player type into Actor instead of directly using BodyHandle<f32>
     player: Actor,
-    player_body: RigidBodyHandle<f32>,
+    player_body: BodyHandle<f32>,
     // walls: Vec<Actor>,
     is_walls_setup: bool,
     walls: Vec<Actor>,
-    wall_bodies: Vec<RigidBodyHandle<f32>>,
+    wall_bodies: Vec<BodyHandle<f32>>,
     wall_collision: bool,
     wall_pos_col_x: f32,
     wall_pos_col_y: f32,
@@ -231,7 +231,7 @@ impl Game {
     }
 
     fn refresh_horizontal_vel(&mut self) {
-        let mut player: std::cell::RefMut<RigidBody<f32>> = self.player_body.borrow_mut();
+        let mut player: std::cell::RefMut<RigidBody<f32>> = self.world.rigid_body(self.player_body);
         let current = player.lin_vel();
         let mut dir = 0.0;
         let mut rot = 0.0;
