@@ -10,11 +10,11 @@ use ggez::event::{ self, EventHandler, Keycode, Mod} ;
 use ggez::graphics::{ clear, circle, line, present, DrawMode, Point2 };
 use ggez::timer;
 
-use na::{Vector2, Isometry2};
-use ncollide2d::shape::{Ball, Cuboid, ShapeHandle};
-use ncollide2d::world::CollisionObjectHandle;
+use na::{ Vector2, Isometry2 };
+use ncollide2d::shape::{ Ball, Cuboid, ShapeHandle };
+use ncollide2d::world::{ CollisionObjectHandle };
 use nphysics2d::world::World;
-use nphysics2d::object::{RigidBody, Material, BodyHandle};
+use nphysics2d::object::{ Material, BodyHandle };
 use nphysics2d::volumetric::Volumetric;
 
 const WINDOW_WIDTH: u32 = 800;
@@ -27,6 +27,8 @@ const PLAYER_R: f32 = 10.0;
 const WALL_LIFE: f32 = 10.0;
 const WALL_BBOX: f32 = 1.0;
 
+const FLOOR_LIFE: f32 = 1.0;
+const FLOOR_BBOX: f32 = 1.0;
 const FLOOR_Y: f32 = 400.0;
 
 const MAX_PHYSICS_VEL: f32 = 250.0;
@@ -40,6 +42,7 @@ const COLLIDER_MARGIN: f32 = 0.01;
 
 enum ActorType {
     Player,
+    Floor,
     Wall,
 }
 
@@ -68,6 +71,7 @@ struct Assets {
 pub struct Game {
     world: World<f32>,
     player: Actor,
+    floor: Actor,
     is_walls_setup: bool,
     walls: Vec<Actor>,
     wall_collision: bool,
@@ -75,8 +79,10 @@ pub struct Game {
     wall_pos_col_y: f32,
 }
 
-
-fn create_floor(world: &mut World<f32>) {
+/*
+ * A floor that will collide with everything (default behaviour).
+ */
+fn create_floor(world: &mut World<f32>) -> Actor {
     let ground_radx = 25.0;
     let ground_rady = 1.0;
     let ground_shape = ShapeHandle::new(Cuboid::new(Vector2::new(
@@ -84,22 +90,54 @@ fn create_floor(world: &mut World<f32>) {
         ground_rady - COLLIDER_MARGIN,
     )));
 
-    let ground_pos = Isometry2::new(-Vector2::y() * ground_rady, na::zero());
-    world.add_collider(
+    let mut vecc = Vector2::new(0., 400.0);
+    println!("{}", vecc);
+    let ground_pos = Isometry2::new(vecc, 0.);
+    let collider_handle = world.add_collider(
         COLLIDER_MARGIN,
         ground_shape,
         BodyHandle::ground(),
         ground_pos,
         Material::default(),
     );
+
+    Actor {
+        tag: ActorType::Floor,
+        collider_handle,
+        pos: Point2::origin(),
+        direction: 0.,
+        velocity: na::zero(),
+        ang_vel: 0.,
+        mov_left: false,
+        mov_right: false,
+        bbox_size: FLOOR_BBOX,
+        life: FLOOR_LIFE,
+    }
 }
 
 fn create_player(world: &mut World<f32>) -> Actor {
-    let geom = ShapeHandle::new(Ball::new(PLAYER_R - COLLIDER_MARGIN));
+    let num = (2000.0f32.sqrt()) as usize;
+    let rad = 0.1;
+    let shift = 2.5 * rad;
+    let centerx = shift * (num as f32) / 2.0;
+    let centery = shift * (num as f32) / 2.0;
+
+    let geom = ShapeHandle::new(Ball::new(rad - COLLIDER_MARGIN));
     let inertia = geom.inertia(1.0);
     let center_of_mass = geom.center_of_mass();
-    let pos = Isometry2::new(Vector2::new(200., 0.), 0.0);
+
+    let x = 500. * rad - centerx;
+    let y = 2.5 * rad + centery * 2.0 + 0.5;
+
+    /*
+    * Create the rigid body.
+    */
+    let pos = Isometry2::new(Vector2::new(x, y), na::zero());
     let handle = world.add_rigid_body(pos, inertia, center_of_mass);
+
+    /*
+        * Create the collider.
+        */
     let collider_handle = world.add_collider(
         COLLIDER_MARGIN,
         geom.clone(),
@@ -107,6 +145,23 @@ fn create_player(world: &mut World<f32>) -> Actor {
         Isometry2::identity(),
         Material::default(),
     );
+
+    // let geom = ShapeHandle::new(Ball::new(rad - COLLIDER_MARGIN));
+    // let inertia = geom.inertia(1.0);
+    // let center_of_mass = geom.center_of_mass();
+
+    // let geom = ShapeHandle::new(Ball::new(PLAYER_R - COLLIDER_MARGIN));
+    // let inertia = geom.inertia(1.0);
+    // let center_of_mass = geom.center_of_mass();
+    // let pos = Isometry2::new(Vector2::new(200., 0.), 0.0);
+    // let handle = world.add_rigid_body(pos, inertia, center_of_mass);
+    // let collider_handle = world.add_collider(
+    //     COLLIDER_MARGIN,
+    //     geom.clone(),
+    //     handle,
+    //     Isometry2::identity(),
+    //     Material::default(),
+    // );
     Actor {
         tag: ActorType::Player,
         collider_handle,
@@ -228,14 +283,15 @@ impl Game {
         print_instructions();
 
         let mut world = World::new();
-        world.set_gravity(Vector2::new(0.0, 200.0));
+        world.set_gravity(Vector2::new(0.0, 100.));
 
-        create_floor(&mut world);
+        let mut floor = create_floor(&mut world);
         let mut player = create_player(&mut world);
         let walls = create_walls(&mut world, 5, player.pos);
 
         let s = Game {
-                world, 
+                world,
+                floor,
                 player, 
                 is_walls_setup: false,
                 walls, 
@@ -314,10 +370,17 @@ impl EventHandler for Game {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         clear(ctx);
-        let collider = self.world.collider(self.player.collider_handle).expect("Collider not found.");
-        let pos = collider.position().translation.vector;
-        circle(ctx, DrawMode::Fill, Point2::new(pos.x, pos.y), PLAYER_R, 0.1)?;
-        line(ctx, &[Point2::new(0.0, FLOOR_Y), Point2::new(WINDOW_WIDTH as f32, FLOOR_Y)], 1.0)?;
+        let player_collider = self.world.collider(self.player.collider_handle).expect("Player Collider not found.");
+        let player_pos = player_collider.position().translation.vector;
+        println!("drawn player pos.x: {}", player_pos.x);
+        println!("drawn player pos.y: {}", player_pos.y);
+        circle(ctx, DrawMode::Fill, Point2::new(player_pos.x, player_pos.y), PLAYER_R, 0.1)?;
+        
+        let floor_collider = self.world.collider(self.floor.collider_handle).expect("Floor Collider not found");
+        let floor_pos = floor_collider.position().translation.vector;
+        println!("drawn floor pos.x: {}", floor_pos.x);
+        println!("drawn floor pos.y: {}", floor_pos.y);
+        line(ctx, &[Point2::new(0.0, floor_pos.y), Point2::new(WINDOW_WIDTH as f32, floor_pos.y)], 1.0)?;
 
         // // Loop over all objects drawing them...
         // {
