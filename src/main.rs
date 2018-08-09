@@ -98,7 +98,7 @@ fn create_player(world: &mut World<f32>) -> Actor {
     let geom = ShapeHandle::new(Ball::new(PLAYER_R - COLLIDER_MARGIN));
     let inertia = geom.inertia(1.0);
     let center_of_mass = geom.center_of_mass();
-    let pos = Isometry2::new(Vector2::new(1.0, 0.0), 0.0);
+    let pos = Isometry2::new(Vector2::new(200., 0.), 0.0);
     let handle = world.add_rigid_body(pos, inertia, center_of_mass);
     let collider_handle = world.add_collider(
         COLLIDER_MARGIN,
@@ -314,10 +314,9 @@ impl EventHandler for Game {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         clear(ctx);
-        // TODO draw player based on physics engine
-        // let pos = self.player_body.borrow().position_center();
-        // circle(ctx, DrawMode::Fill, Point2::new(pos.x, pos.y), PLAYER_R, 0.1)?;
-        circle(ctx, DrawMode::Fill, Point2::new(0.5, 0.5), PLAYER_R, 0.1)?;
+        let collider = self.world.collider(self.player.collider_handle).expect("Collider not found.");
+        let pos = collider.position().translation.vector;
+        circle(ctx, DrawMode::Fill, Point2::new(pos.x, pos.y), PLAYER_R, 0.1)?;
         line(ctx, &[Point2::new(0.0, FLOOR_Y), Point2::new(WINDOW_WIDTH as f32, FLOOR_Y)], 1.0)?;
 
         // // Loop over all objects drawing them...
