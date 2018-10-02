@@ -6,8 +6,8 @@ extern crate rand;
 
 use ggez::{ContextBuilder, Context, GameResult};
 use ggez::conf::{WindowMode, WindowSetup};
-use ggez::event::{ self, EventHandler, Keycode, Mod} ;
-use ggez::graphics::{ Vector2 as gVector2, clear, circle, line, present, DrawMode, Point2 };
+use ggez::event::{self, EventHandler, Keycode, Mod};
+use ggez::graphics::{Vector2 as gVector2, clear, circle, line, present, DrawMode, Point2};
 use ggez::timer;
 
 use rand::Rng;
@@ -156,7 +156,7 @@ fn player_handle_input(actor: &mut Actor, dt: f32) {
     actor.direction += dt * PLAYER_TURN_RATE; //* input.xaxis;
 
     // if input.yaxis > 0.0 {
-        player_thrust(actor, dt);
+    player_thrust(actor, dt);
     // }
 }
 
@@ -184,7 +184,6 @@ fn update_actor_position(actor: &mut Actor, dt: f32) {
 
 impl Game {
     fn new(_ctx: &mut Context) -> GameResult<Game> {
-
         print_instructions();
 
         let mut world = World::new();
@@ -195,7 +194,7 @@ impl Game {
 
         let mut player = create_player();
         let walls = create_walls(5, player.pos);
-        
+
         let wall_bodies = Vec::new();
 
         // let mut player = RigidBody::new_dynamic(Ball::new(PLAYER_R), 1.0, 0.0, 0.0);
@@ -203,17 +202,17 @@ impl Game {
         player.body.append_translation(&Translation2::new(400.0, 300.0));
         let player_body = world.add_rigid_body(player.body.clone());
 
-        let s = Game { 
-                world, 
-                player, 
-                player_body, 
-                is_walls_setup: false,
-                walls, 
-                wall_bodies,
-                wall_collision: false,
-                wall_pos_col_x: 0.0,
-                wall_pos_col_y: 0.0,
-            };
+        let s = Game {
+            world,
+            player,
+            player_body,
+            is_walls_setup: false,
+            walls,
+            wall_bodies,
+            wall_collision: false,
+            wall_pos_col_x: 0.0,
+            wall_pos_col_y: 0.0,
+        };
         Ok(s)
     }
 
@@ -259,10 +258,10 @@ impl Game {
             println!("player box: {}", self.player.bbox_size);
             println!("wall box: {}", wall.bbox_size);
             println!("box size: {}", self.player.bbox_size + wall.bbox_size);
-            println!("{}", (pdistance.norm()/1000.0) < (self.player.bbox_size + wall.bbox_size));
+            println!("{}", (pdistance.norm() / 1000.0) < (self.player.bbox_size + wall.bbox_size));
             /* TEST VALUES */
 
-            if (pdistance.norm()/100.) < (self.player.bbox_size + wall.bbox_size) {
+            if (pdistance.norm() / 100.) < (self.player.bbox_size + wall.bbox_size) {
                 // self.player.life = 0.0;
                 self.wall_collision = true;
                 self.wall_pos_col_x = wall.pos.x;
@@ -314,10 +313,10 @@ impl EventHandler for Game {
                 // let mut coords = wall_body.borrow_mut();
                 // let local = coords.local_to_world;
                 line(ctx, &[Point2::new(
-                    wall_body.borrow().position_center().x, 
-                    wall_body.borrow().position_center().y), 
-                    Point2::new(WINDOW_WIDTH as f32, 
-                    -100.0)], 1.0)?; //wall_body.borrow().position_center().coords.data
+                    wall_body.borrow().position_center().x,
+                    wall_body.borrow().position_center().y),
+                    Point2::new(WINDOW_WIDTH as f32,
+                                -100.0)], 1.0)?; //wall_body.borrow().position_center().coords.data
             }
         }
 
@@ -364,9 +363,9 @@ impl EventHandler for Game {
                     if self.wall_collision {
                         // if (self.wall_pos_col_y > self.player.pos.y) &&
                         // (self.wall_pos_col_x > self.player.pos.x) {
-                            self.world.set_gravity(Vector2::new(0.0, 200.0));
+                        self.world.set_gravity(Vector2::new(0.0, 200.0));
                         // }
-                    } 
+                    }
                     // else {
                     //     self.world.set_gravity(Vector2::new(0.0, -200.0));
                     // }
